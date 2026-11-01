@@ -23,10 +23,11 @@ No external agent loop decides when the model thinks, speaks, calls a tool or wa
 | Quick tasks within 24-tick deadline (in distribution) | 98.4% | 98.2% | 91.5% | 11.7% |
 | Median quick-task latency, stress (ticks) | 7 | 9 | 8 | 487 |
 
-In the multimodal pilot (frozen CLIP-ConvNeXt encoder, GSM8K rationales on the think channel), one model:
+Further results (see the paper for details):
 
-- answered 95.3% of visual questions on held-out synthetic scenes;
-- solved 52.0% of GSM8K problems; the base model's thinking mode solved 53.7%.
+- **Scale.** With Qwen3-1.7B and Qwen3-4B (LoRA), all arms improved under heavy load; router and tags were equal, and the orchestrator still missed more deadlines (router minus orchestrator on quick tasks: +6.8 pp at 4B).
+- **Memory.** When revisions arrived after the original request had been evicted, keeping mem-routed tokens raised correct revisions from 43.8% (sliding window) to 67.0%, and to 99.0% after long-gap episodes were added to training.
+- **Seeing, hearing and reasoning in one stream.** With frozen CLIP-ConvNeXt (see) and Whisper-base (hear) encoders, one model answered about 96% of visual questions on held-out scenes, added spoken digits from an unseen speaker with 99% accuracy, and solved about 50% of GSM8K problems on its think channel (base model's thinking mode: 53.7%). Interrupting a thought with urgent requests cost 5.0 ± 1.2 pp of math accuracy (3 seeds).
 
 See the paper for confidence intervals, ablations and limitations. All tasks are synthetic and all models imitate
 scripted policies.
@@ -41,6 +42,7 @@ scripted policies.
 | `src/rollout.py` | batched closed-loop evaluation (one token per sequence per step) |
 | `src/analyze.py`, `src/tables.py`, `src/figs.py` | statistics (paired bootstrap), LaTeX tables, figures |
 | `src_mm/` | multimodal pilot: `see` channel, synthetic scenes, GSM8K self-distillation, linear probes |
+| `src_av/` | `src_mm` plus a `hear` channel (Free Spoken Digit Dataset, frozen Whisper-base encoder) |
 | `scripts/` | run queues used for the paper |
 | `runs/` | per-episode results (JSONL) behind every number in the paper |
 | `paper/` | LaTeX source, figures, generated tables, the hypotheses document written before the main runs |
@@ -62,7 +64,9 @@ Multimodal pilot:
 1. `scripts/gpu0_prep.sh` builds the image features and GSM8K rationales.
 2. `scripts/gpu0_mmv.sh` runs two-stage training and evaluation.
 
-One training run takes about 13 minutes on a single RTX 4090.
+Larger base models: `BASE_MODEL=Qwen/Qwen3-4B LORA_R=64 SUF=_4b scripts/run_q.sh "router tags orch" "0"` (see `scripts/gpu1_scale.sh`).
+
+One 0.6B training run takes about 13 minutes on a single RTX 4090.
 
 ## Model weights
 
@@ -81,4 +85,4 @@ Trained checkpoints (bf16 `state_dict`, load with `ChannelLM(...).load_state_dic
 
 ## Licence
 
-Code: MIT. Base model Qwen3-0.6B: Apache-2.0. GSM8K: MIT.
+Code: MIT. Base models Qwen3-0.6B/1.7B/4B: Apache-2.0. GSM8K: MIT. Free Spoken Digit Dataset: CC BY-SA 4.0. Whisper: MIT.

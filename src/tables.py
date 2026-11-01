@@ -275,21 +275,25 @@ def av_table():
                              ('exists', 'existence'), ('color_of', 'colour of unique shape')]]
     items += [('GSM8K, no interruptions', 'math_solo', k('math'), 'solo'), ('GSM8K, quick tasks mid-thought', 'math_async', k('math'), 'async'),
               ('AsyncWorld id episodes, all tasks', 'id', lambda t: True, 'id')]
-    rows = []
+    rows, nseed = [], {}
     for lab, split, f, key in items:
         cells = []
         for arm, _, ak in cols:
-            p = f'runs/{arm}_s0_{split}.jsonl'
-            if os.path.exists(p) and sum(1 for _ in open(p)) >= 300:
-                x = [float(t['ok']) for r in load(p) for t in r['tasks'] if f(t)]
+            ps = complete(f'runs/{arm}_s[0-9]_{split}.jsonl', 300)
+            nseed[ak] = max(nseed.get(ak, 0), len(ps))
+            if ps:
+                x = [float(t['ok']) for p in ps for r in load(p) for t in r['tasks'] if f(t)]
                 if not x:
                     cells.append('--'); continue
                 t = boot(x); cells.append(pct(t)); mac(f'av{ak}{key}', f'{100 * t[0]:.1f}')
+                if key in ('listen', 'vis', 'solo', 'async'):
+                    per = [100 * np.mean([float(t['ok']) for r in load(p) for t in r['tasks'] if f(t)]) for p in ps]
+                    mac(f'av{ak}{key}seeds', ', '.join(f'{v:.1f}' for v in per))
             else:
                 cells.append('--')
         rows.append(f'{lab} & ' + ' & '.join(cells) + ' \\\\')
     open('paper/gen/tab_av.tex', 'w').write(
-        '\\begin{tabular}{l' + 'r' * len(cols) + '}\n\\toprule\nEvaluation & ' + ' & '.join(c[1] for c in cols)
+        '\\begin{tabular}{l' + 'r' * len(cols) + '}\n\\toprule\nEvaluation & ' + ' & '.join(f'{c[1]} ({nseed.get(c[2], 0)} seed{"s" if nseed.get(c[2], 0) > 1 else ""})' for c in cols)
         + ' \\\\\n\\midrule\n' + '\n'.join(rows) + '\n\\bottomrule\n\\end{tabular}\n')
 
 

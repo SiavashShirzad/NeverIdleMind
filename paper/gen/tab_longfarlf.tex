@@ -1,0 +1,12 @@
+\begin{tabular}{llrrrrrrr}
+\toprule
+Arm & Eviction & Seeds & Task & Episode & Revise & Cancel & Plain & Tokens \\
+\midrule
+Router (ours) & keep mem-routed & 2 & 98.2 {\scriptsize[96.9, 99.4]} & 73.4 {\scriptsize[60.9, 85.9]} & 99.0 {\scriptsize[97.4, 100.0]} & 99.5 {\scriptsize[98.4, 100.0]} & 97.4 {\scriptsize[95.1, 99.2]} & 2719 {\scriptsize[2496, 3029]} \\
+Router (ours) & sliding window & 2 & 92.1 {\scriptsize[90.0, 94.1]} & 1.6 {\scriptsize[0.0, 4.7]} & 43.8 {\scriptsize[34.4, 53.3]} & 99.0 {\scriptsize[96.9, 100.0]} & 97.5 {\scriptsize[95.6, 99.1]} & 2730 {\scriptsize[2491, 3062]} \\
+\quad oracle (full context) & & -- & {\color{gray}99.9} & {\color{gray}96.9} & {\color{gray}100.0} & {\color{gray}100.0} & {\color{gray}100.0} & {\color{gray}2521} \\
+In-stream tags & keep mem-routed & 2 & 89.0 {\scriptsize[83.7, 93.9]} & 46.9 {\scriptsize[31.2, 62.5]} & 86.8 {\scriptsize[80.0, 92.9]} & 95.6 {\scriptsize[92.6, 98.3]} & 87.9 {\scriptsize[81.8, 93.6]} & 4223 {\scriptsize[3466, 5014]} \\
+In-stream tags & sliding window & 2 & 89.2 {\scriptsize[85.9, 92.0]} & 0.0 {\scriptsize[0.0, 0.0]} & 38.8 {\scriptsize[31.9, 45.3]} & 97.8 {\scriptsize[95.0, 100.0]} & 94.7 {\scriptsize[91.1, 97.7]} & 3254 {\scriptsize[2840, 3783]} \\
+\quad oracle (full context) & & -- & {\color{gray}99.8} & {\color{gray}93.8} & {\color{gray}100.0} & {\color{gray}100.0} & {\color{gray}100.0} & {\color{gray}2738} \\
+\bottomrule
+\end{tabular}

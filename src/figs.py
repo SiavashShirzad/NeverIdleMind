@@ -110,6 +110,29 @@ def fig_long():
     fig.savefig('paper/figs/long.pdf'); fig.savefig('paper/figs/long.png')
 
 
+def fig_longfar():
+    cats, names = ['revise', 'episode', 'task'], ['Revisions\nafter eviction', 'Whole episode\ncorrect', 'All tasks']
+    fig, axs = plt.subplots(1, 2, figsize=(6.2, 2.3), sharey=True)
+    for ax, suf, title in [(axs[0], '', 'Original training (seeds 0-2)'), (axs[1], '_lf', '+ 600 long-gap episodes (seeds 0-1)')]:
+        k = 0
+        for arm in ['router', 'tags']:
+            for ev, alpha, lab in [('mem', 1.0, 'keep mem-routed'), ('plain', 0.45, 'sliding window')]:
+                fs = complete(f'runs/{arm}{suf}_s[0-9]_longfar_{ev}.jsonl', 32)
+                if not fs:
+                    continue
+                e, lo, hi = stat(matrix(fs))
+                for i, c in enumerate(cats):
+                    j = KEYS.index(c); x = i + (k - 1.5) * 0.2
+                    ax.bar(x, 100 * e[j], 0.18, color=COL[arm], alpha=alpha, label=f'{LAB[arm]}, {lab}' if i == 0 and suf == '' else None, zorder=2)
+                    ax.errorbar(x, 100 * e[j], yerr=[[100 * (e[j] - lo[j])], [100 * (hi[j] - e[j])]], color=INK, lw=0.8, capsize=1.5, zorder=3)
+                k += 1
+        ax.set_xticks(range(len(cats)), names, fontsize=7); ax.set_ylim(0, 104); ax.set_title(title, fontsize=7.5)
+        ax.yaxis.grid(True, color=GRID, zorder=0)
+    axs[0].set_ylabel('Success (%)')
+    fig.legend(loc='upper center', ncol=4, frameon=False, fontsize=6.5, bbox_to_anchor=(0.5, 1.07))
+    fig.savefig('paper/figs/longfar.pdf', bbox_inches='tight'); fig.savefig('paper/figs/longfar.png', dpi=200, bbox_inches='tight')
+
+
 if __name__ == '__main__':
-    fig_success(); fig_latency(); fig_long()
+    fig_success(); fig_latency(); fig_long(); fig_longfar()
     print('ok')

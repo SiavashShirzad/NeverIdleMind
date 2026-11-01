@@ -1,6 +1,7 @@
 """AsyncWorld: procedurally generated asynchronous multi-task environment,
 an oracle policy that writes ideal channel-labelled traces under each protocol,
 and the scoring used for every arm."""
+import os
 import random
 import re
 
@@ -436,6 +437,8 @@ class Oracle:
                 if not self.plan and self.stack and not (self.items and min(self.items, key=lambda x: (x[0], x[1]))[0] <= (1 if self.stack[-1][1]["chan"] == "think" else 0)):
                     self.cur_item, self.cur, self.plan = self.stack.pop()
                     self.cur['tagged'] = False
+                    if os.environ.get('REORIENT') and self.cur['chan'] == 'think' and self.cur['i'] > 0:
+                        self.reorient()
                     if self.st[self.cur_item[2][1]]['cancelled']:
                         self.cur, self.plan = None, []
                     continue
@@ -487,6 +490,22 @@ class Oracle:
                 else:
                     self.cur['tagged'] = False  # tag formats must reopen the channel
         return self.stream
+
+    def reorient(self):
+        """Resume a paused math thought with a recap line, then redo the interrupted line from its start."""
+        c, t = self.cur, self.cur_item[2][1]
+        d = self.ep['tasks'][t]
+        if d['kind'] != 'math':
+            return
+        q = ' '.join(POOLS['math'][d['mi']]['q'].split())
+        ask = re.split(r'(?<=[.?!])\s+', q)[-1]
+        toks, i = c['toks'], c['i']
+        start = i
+        while start > 0 and '\n' not in self.T.tk.decode([toks[start - 1]]):
+            start -= 1
+        recap = self.T.line(f"Back to T{t}. The question: {ask}")
+        c['toks'] = ([self.T.nl] if i > start else []) + recap + toks[start:]
+        c['i'] = 0
 
     def result(self):
         n_model = sum(1 for x in self.stream if x[2])

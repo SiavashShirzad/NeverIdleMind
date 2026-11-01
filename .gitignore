@@ -12,3 +12,5 @@ paper/*.bbl
 paper/*.blg
 runs/*.npy
 runs/tiny_*
+data/aud/*.pt
+data/ext/

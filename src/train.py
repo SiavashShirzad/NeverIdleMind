@@ -20,6 +20,7 @@ ap.add_argument('--lr', type=float, default=5e-5)
 ap.add_argument('--lr_new', type=float, default=1e-3)
 ap.add_argument('--epochs', type=float, default=1.0)
 ap.add_argument('--out', default='ckpt')
+ap.add_argument('--suffix', default='', help='checkpoint/log name suffix, e.g. _1.7b')
 a = ap.parse_args()
 
 torch.manual_seed(a.seed); random.seed(a.seed)
@@ -27,7 +28,8 @@ torch.set_num_threads(8)
 proto = 'router' if a.arm.startswith('router') else a.arm
 dev = 'cuda'
 tk = load_tokenizer()
-m = ChannelLM(router=proto == 'router', tk=tk, chan_emb=a.arm != 'router_noemb').to(dev)
+m = ChannelLM(router=proto == 'router', tk=tk, dtype=torch.bfloat16 if os.environ.get('LORA_R') else torch.float32,
+              chan_emb=a.arm != 'router_noemb').to(dev)
 m.base.gradient_checkpointing_enable()
 m.base.config.use_cache = False
 data = torch.load(a.data)[proto]
@@ -42,8 +44,8 @@ for i in order:
 batches.append(cur)
 n_steps = int(len(batches) * a.epochs)
 
-new = list(m.chan_emb.parameters()) + list(m.router.parameters())
-opt = torch.optim.AdamW([{'params': [p for p in m.base.parameters()], 'lr': a.lr},
+new = list(m.chan_emb.parameters()) + list(m.router.parameters()) + ([m.tag_delta] if m.lora else [])
+opt = torch.optim.AdamW([{'params': [p for p in m.base.parameters() if p.requires_grad], 'lr': a.lr},
                          {'params': new, 'lr': a.lr_new}], weight_decay=0.0, betas=(0.9, 0.95))
 sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min(1, (s + 1) / 30) * 0.5 * (1 + math.cos(math.pi * min(s, n_steps) / n_steps)))
 
@@ -52,7 +54,7 @@ from torch.utils.checkpoint import checkpoint
 
 
 def _ce(h, y):
-    return F.cross_entropy(m.base.lm_head(h).float(), y, reduction='sum')
+    return F.cross_entropy(m.logits(h).float(), y, reduction='sum')
 
 
 def lm_loss(h, y, chunk=2048):  # chunked + recomputed so the 152k-way logits never sit in memory at once
@@ -70,7 +72,7 @@ def collate(idx):
     return ids.to(dev), ch.to(dev), mod.to(dev), att.to(dev)
 
 
-log = open(f'logs/train_{a.arm}_s{a.seed}.jsonl', 'w')
+log = open(f'logs/train_{a.arm}{a.suffix}_s{a.seed}.jsonl', 'w')
 t0, step, tokseen = time.time(), 0, 0
 m.train()
 ep_order = []
@@ -103,6 +105,5 @@ while step < n_steps:
         if step % 100 == 0 or step == n_steps:
             print(rec, flush=True)
 os.makedirs(a.out, exist_ok=True)
-sd = {k: v.to(torch.bfloat16) for k, v in m.state_dict().items()}
-torch.save(sd, f'{a.out}/{a.arm}_s{a.seed}.pt')
+torch.save(m.trainable_state(), f'{a.out}/{a.arm}{a.suffix}_s{a.seed}.pt')
 print('saved', time.time() - t0)

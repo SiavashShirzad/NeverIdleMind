@@ -21,16 +21,20 @@ sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min(1, (s + 1) / 30) * 
 m.train()
 for step in range(n_steps):
     b = ex[step * BS:(step + 1) * BS]
-    p = [tk(prompt(r['q']), add_special_tokens=False).input_ids for r in b]
-    a = [tk(r['rationale'] + tk.eos_token, add_special_tokens=False).input_ids for r in b]
-    L = max(len(x) + len(y) for x, y in zip(p, a))
-    ids = torch.full((len(b), L), tk.pad_token_id); lab = torch.full((len(b), L), -100); att = torch.zeros(len(b), L, dtype=torch.long)
-    for j, (x, y) in enumerate(zip(p, a)):
-        n = len(x) + len(y); ids[j, :n] = torch.tensor(x + y); lab[j, len(x):n] = torch.tensor(y); att[j, :n] = 1
-    with torch.autocast('cuda', dtype=torch.bfloat16):
-        logits = m(input_ids=ids.cuda(), attention_mask=att.cuda()).logits
-    loss = F.cross_entropy(logits[:, :-1].float().reshape(-1, logits.shape[-1]), lab[:, 1:].reshape(-1).cuda(), ignore_index=-100)
-    loss.backward(); torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0); opt.step(); sched.step(); opt.zero_grad()
+    for k in range(0, len(b), 4):  # micro-batches of 4, gradient accumulation to the batch of 16
+        mb = b[k:k + 4]
+        p = [tk(prompt(r['q']), add_special_tokens=False).input_ids for r in mb]
+        a = [tk(r['rationale'] + tk.eos_token, add_special_tokens=False).input_ids for r in mb]
+        L = max(len(x) + len(y) for x, y in zip(p, a))
+        ids = torch.full((len(mb), L), tk.pad_token_id); lab = torch.full((len(mb), L), -100); att = torch.zeros(len(mb), L, dtype=torch.long)
+        for j, (x, y) in enumerate(zip(p, a)):
+            n = len(x) + len(y); ids[j, :n] = torch.tensor(x + y); lab[j, len(x):n] = torch.tensor(y); att[j, :n] = 1
+        with torch.autocast('cuda', dtype=torch.bfloat16):
+            logits = m(input_ids=ids.cuda(), attention_mask=att.cuda()).logits
+        loss = F.cross_entropy(logits[:, :-1].float().reshape(-1, logits.shape[-1]), lab[:, 1:].reshape(-1).cuda(),
+                               ignore_index=-100, reduction='sum') / sum(len(y) for y in a) * len(mb) / len(b)
+        loss.backward(); del logits
+    torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0); opt.step(); sched.step(); opt.zero_grad()
     if step % 50 == 0:
         print(step, n_steps, round(loss.item(), 4), flush=True)
 

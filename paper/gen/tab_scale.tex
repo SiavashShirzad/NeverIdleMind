@@ -1,0 +1,22 @@
+\begin{tabular}{lllrrrrr}
+\toprule
+ & & & & \multicolumn{2}{c}{In distribution} & \multicolumn{2}{c}{Stress} \\
+\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+Base & Fine-tuning & Arm & Seeds & Task & Quick & Task & Episode \\
+\midrule
+0.6B & full & Router (ours) & 5 & 99.6 {\scriptsize[99.3, 99.8]} & 98.3 {\scriptsize[97.2, 99.2]} & 97.8 {\scriptsize[97.4, 98.2]} & 83.7 {\scriptsize[81.1, 86.5]} \\
+0.6B & full & In-stream tags & 5 & 99.5 {\scriptsize[99.2, 99.7]} & 98.4 {\scriptsize[97.5, 99.3]} & 97.1 {\scriptsize[96.7, 97.6]} & 78.9 {\scriptsize[76.0, 81.7]} \\
+0.6B & full & Orchestrator & 5 & 97.6 {\scriptsize[96.9, 98.3]} & 91.5 {\scriptsize[88.6, 94.1]} & 97.8 {\scriptsize[97.3, 98.2]} & 83.6 {\scriptsize[80.5, 86.5]} \\
+\addlinespace
+0.6B & LoRA & Router (ours) & 1 & 99.4 {\scriptsize[99.0, 99.8]} & 98.0 {\scriptsize[96.5, 99.2]} & 97.9 {\scriptsize[97.3, 98.5]} & 83.3 {\scriptsize[79.0, 87.3]} \\
+0.6B & LoRA & In-stream tags & 1 & 99.3 {\scriptsize[98.8, 99.7]} & 98.7 {\scriptsize[97.7, 99.5]} & 97.5 {\scriptsize[96.9, 98.0]} & 78.7 {\scriptsize[73.7, 83.0]} \\
+\addlinespace
+1.7B & LoRA & Router (ours) & 2 & 99.6 {\scriptsize[99.3, 99.8]} & 98.8 {\scriptsize[97.5, 99.8]} & 98.4 {\scriptsize[97.9, 98.8]} & 88.2 {\scriptsize[84.7, 91.2]} \\
+1.7B & LoRA & In-stream tags & 2 & 99.4 {\scriptsize[99.0, 99.7]} & 98.2 {\scriptsize[96.8, 99.2]} & 98.8 {\scriptsize[98.5, 99.1]} & 89.3 {\scriptsize[86.5, 92.0]} \\
+1.7B & LoRA & Orchestrator & 2 & 97.6 {\scriptsize[96.8, 98.2]} & 91.3 {\scriptsize[88.4, 93.9]} & 98.3 {\scriptsize[97.8, 98.8]} & 86.8 {\scriptsize[83.3, 90.0]} \\
+\addlinespace
+4B & LoRA & Router (ours) & 1 & 99.6 {\scriptsize[99.2, 99.9]} & 98.2 {\scriptsize[96.7, 99.3]} & 99.3 {\scriptsize[99.0, 99.6]} & 94.3 {\scriptsize[91.7, 96.7]} \\
+4B & LoRA & In-stream tags & 1 & 99.6 {\scriptsize[99.2, 99.8]} & 98.5 {\scriptsize[97.2, 99.5]} & 99.5 {\scriptsize[99.2, 99.7]} & 95.3 {\scriptsize[92.7, 97.7]} \\
+4B & LoRA & Orchestrator & 1 & 97.6 {\scriptsize[96.8, 98.3]} & 91.3 {\scriptsize[88.5, 94.0]} & 99.4 {\scriptsize[99.0, 99.7]} & 95.0 {\scriptsize[92.3, 97.3]} \\
+\bottomrule
+\end{tabular}

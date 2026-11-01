@@ -151,7 +151,7 @@ def main():
     m = ChannelLM(router=proto == 'router', tk=T.tk, dtype=torch.bfloat16,
                   chan_emb='noemb' not in a.arm).cuda().eval()
     if a.ckpt:
-        m.load_state_dict(torch.load(a.ckpt, map_location='cuda'))
+        m.load_state_dict(torch.load(a.ckpt, map_location='cuda'), strict=not m.lora)
     eps = [gen_episode(random.Random(seed0 + i), a.split) for i in range(a.n)]
     res, t0 = [], time.time()
     max_steps = 9000 if a.split.startswith('long') else 3000

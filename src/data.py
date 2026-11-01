@@ -41,14 +41,14 @@ def _job(args):
     out = {}
     for p in PROTOCOLS:
         stream = Oracle(ep, p, _T, random.Random(seed * 7 + 1)).run()
-        if cfg != 'long':
+        if not cfg.startswith('long'):
             out[p] = [pack(_T, stream)]
             continue
         rng, ex = random.Random(seed * 13 + 5), []
         for _ in range(n_views):
             e = rng.randint(W_LEN, len(stream))
             s = e - W_LEN
-            mode = rng.choice(['mem', 'plain'])
+            mode = 'mem' if cfg == 'longfar' else rng.choice(['mem', 'plain'])  # long-gap views only with retention
             kept = evict_view(stream, s, mode)
             ex.append(pack(_T, kept + stream[s:e], loss_from=len(kept)))
         out[p] = ex
@@ -66,11 +66,19 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--n_id', type=int, default=12000)
     ap.add_argument('--n_long', type=int, default=600)
+    ap.add_argument('--n_longfar', type=int, default=0)
+    ap.add_argument('--base', default=None, help='existing data file to extend')
     ap.add_argument('--out', default='data/train.pt')
     a = ap.parse_args()
-    d1 = build(a.n_id, 'id', 10_000_000)
-    d2 = build(a.n_long, 'long', 20_000_000)
-    data = {p: d1[p] + d2[p] for p in PROTOCOLS}
+    if a.base:
+        data = torch.load(a.base)
+    else:
+        d1 = build(a.n_id, 'id', 10_000_000)
+        d2 = build(a.n_long, 'long', 20_000_000)
+        data = {p: d1[p] + d2[p] for p in PROTOCOLS}
+    if a.n_longfar:
+        d3 = build(a.n_longfar, 'longfar', 25_000_000)
+        data = {p: data[p] + d3[p] for p in PROTOCOLS}
     for p in PROTOCOLS:
         L = [len(x['ids']) for x in data[p]]
         print(p, len(L), 'tokens', sum(L), 'max', max(L), 'model-tok', sum(int(x['model'].sum()) for x in data[p]))

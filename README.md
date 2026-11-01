@@ -25,9 +25,9 @@ No external agent loop decides when the model thinks, speaks, calls a tool or wa
 
 Further results (see the paper for details):
 
-- **Scale.** With Qwen3-1.7B and Qwen3-4B (LoRA), all arms improved under heavy load; router and tags were equal, and the orchestrator still missed more deadlines (router minus orchestrator on quick tasks: +6.8 pp at 4B).
+- **Scale.** With Qwen3-1.7B and Qwen3-4B (LoRA), all arms improved under heavy load; the orchestrator still missed more deadlines (router minus orchestrator on quick tasks: +7.2 pp at 4B); at 4B tags was slightly ahead of the router under heavy load (−0.4 pp), while the router still used about 8% fewer tokens.
 - **Memory.** When revisions arrived after the original request had been evicted, keeping mem-routed tokens raised correct revisions from 43.8% (sliding window) to 67.0%, and to 99.0% after long-gap episodes were added to training.
-- **Seeing, hearing and reasoning in one stream.** With frozen CLIP-ConvNeXt (see) and Whisper-base (hear) encoders, one model answered about 96% of visual questions on held-out scenes, added spoken digits from an unseen speaker with 99% accuracy, and solved about 50% of GSM8K problems on its think channel (base model's thinking mode: 53.7%). Interrupting a thought with urgent requests cost 5.0 ± 1.2 pp of math accuracy (3 seeds).
+- **Seeing, hearing and reasoning in one stream.** With frozen CLIP-ConvNeXt (see) and Whisper-base (hear) encoders, one model answered 96.4% of visual questions on held-out scenes, added spoken digits from an unseen speaker with 99.2% accuracy, and solved 46.9% of GSM8K problems on its think channel (3 seeds; the vision-only model 50.7%, the base model's thinking mode 53.7%). Interrupting a thought with urgent requests cost 5.0 ± 1.2 pp of math accuracy (3 seeds).
 
 See the paper for confidence intervals, ablations and limitations. All tasks are synthetic and all models imitate
 scripted policies.

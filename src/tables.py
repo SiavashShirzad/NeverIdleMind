@@ -213,6 +213,11 @@ def scale_table():
             out.append(f'{size} & {ft} & {lab} & {ns} & {c(A, "task")} & {c(A, "quick")} & {c(B, "task")} & {c(B, "episode")} \\\\')
             mac(f'sc{arm}{SCODE[suf]}idtask', f'{100 * A[0][0]:.1f}'); mac(f'sc{arm}{SCODE[suf]}sttask', f'{100 * B[0][0]:.1f}')
             mac(f'sc{arm}{SCODE[suf]}idquick', f'{100 * A[0][2]:.1f}'); mac(f'sc{arm}{SCODE[suf]}stepisode', f'{100 * B[0][1]:.1f}')
+        R = complete(f'runs/router{suf}_s[0-9]_stress.jsonl', 300); T = complete(f'runs/tags{suf}_s[0-9]_stress.jsonl', 300)
+        if R and T:
+            n = min(len(R), len(T)); e, lo, hi, p = paired_diff(matrix(R[:n]), matrix(T[:n]))
+            for k in ['task', 'episode']:
+                j = KEYS.index(k); mac(f'scrt{SCODE[suf]}{k}', f'{100 * e[j]:+.1f} [{100 * lo[j]:+.1f}, {100 * hi[j]:+.1f}]')
         R = complete(f'runs/router{suf}_s[0-9]_id.jsonl', 300); O = complete(f'runs/orch{suf}_s[0-9]_id.jsonl', 300)
         if R and O:
             n = min(len(R), len(O)); e, lo, hi, p = paired_diff(matrix(R[:n]), matrix(O[:n])); k = KEYS.index('quick')
@@ -223,7 +228,7 @@ def scale_table():
     def seeds(suf):
         n = sorted({len(complete(f'runs/{a}{suf}_s[0-9]_stress.jsonl', 300)) for a in ['router', 'tags', 'orch']})
         return W[n[0]] if len(n) == 1 else f'{W[n[0]]} to {W[n[-1]]}'
-    mac('scaleseedsclause', f'{seeds("_1.7b")} seed(s) per arm at 1.7B and {seeds("_4b")} at 4B'.replace('one seed(s)', 'one seed').replace('seed(s)', 'seeds'))
+    mac('scaleseedsclause', (f'{seeds("_1.7b")} seed(s) per arm at 1.7B and 4B' if seeds('_1.7b') == seeds('_4b') else f'{seeds("_1.7b")} seed(s) per arm at 1.7B and {seeds("_4b")} at 4B').replace('one seed(s)', 'one seed').replace('seed(s)', 'seeds'))
     open('paper/gen/tab_scale.tex', 'w').write(
         '\\begin{tabular}{lllrrrrr}\n\\toprule\n & & & & \\multicolumn{2}{c}{In distribution} & \\multicolumn{2}{c}{Stress} \\\\\n'
         '\\cmidrule(lr){5-6}\\cmidrule(lr){7-8}\nBase & Fine-tuning & Arm & Seeds & Task & Quick & Task & Episode \\\\\n\\midrule\n'

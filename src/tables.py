@@ -167,8 +167,41 @@ def mm_table():
         + '\n'.join(f'{a} & {n} & {c} & {d} \\\\' for a, n, c, d in rows) + '\n\\bottomrule\n\\end{tabular}\n')
 
 
+def seed_table():
+    from scipy import stats
+    out = []
+    for split in ['id', 'stress']:
+        for arm, lab in ARMS + [('router_noemb', 'Router w/o channel emb.')]:
+            fs = complete(f'runs/{arm}_s[0-9]_{split}.jsonl', 300)
+            if not fs:
+                continue
+            v = np.array([100 * np.nanmean(matrix([f])[0, :, 0]) for f in fs])
+            h = stats.t.ppf(0.975, len(v) - 1) * v.std(ddof=1) / np.sqrt(len(v)) if len(v) > 1 else np.nan
+            mac(f'seed{arm}{split}sd'.replace('_', ''), f'{v.std(ddof=1):.1f}')
+            out.append(f'{split} & {lab} & {len(v)} & ' + ', '.join(f'{x:.1f}' for x in v) +
+                       f' & {v.mean():.1f} $\\pm$ {v.std(ddof=1):.1f} & [{v.mean() - h:.1f}, {v.mean() + h:.1f}] \\\\')
+    open('paper/gen/tab_seeds.tex', 'w').write(
+        '\\begin{tabular}{llrlrr}\n\\toprule\nSplit & Arm & Seeds & Task success per seed (\\%) & Mean $\\pm$ SD & 95\\% CI (seeds, $t$) \\\\\n\\midrule\n'
+        + '\n'.join(out) + '\n\\bottomrule\n\\end{tabular}\n')
+
+
+def holm():
+    # confirmatory family: router vs each comparator on in-distribution task and quick success
+    R = matrix(complete('runs/router_s[0-9]_id.jsonl', 300))
+    ps = []
+    for arm in ['tags', 'orch', 'turn']:
+        e, lo, hi, p = paired_diff(R, matrix(complete(f'runs/{arm}_s[0-9]_id.jsonl', 300)))
+        for k in ['task', 'quick']:
+            ps.append((f'holm{arm}{k}', max(p[KEYS.index(k)], 1 / NB)))
+    order = sorted(range(len(ps)), key=lambda i: ps[i][1]); adj, run = {}, 0
+    for r, i in enumerate(order):
+        run = max(run, min(1, (len(ps) - r) * ps[i][1])); adj[ps[i][0]] = run
+    for k, v in adj.items():
+        mac(k, '$<$0.003' if v <= 6 / NB else f'{v:.3f}')
+
+
 if __name__ == '__main__':
-    main_table(); diff_table(); long_table(); mm_table()
+    main_table(); diff_table(); long_table(); mm_table(); seed_table(); holm()
     with open('paper/gen/numbers.tex', 'w') as f:
         for k, v in macros.items():
             f.write(f'\\newcommand{{\\{"".join(c for c in k if c.isalpha())}}}{{{v}}}\n')

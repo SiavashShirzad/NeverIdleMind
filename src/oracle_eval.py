@@ -3,8 +3,8 @@ import json, random, sys
 from model import load_tokenizer
 from world import PROTOCOLS, Oracle, Tok, gen_episode
 T = Tok(load_tokenizer())
-for split, n in [('id', 300), ('stress', 300), ('long', 32)]:
-    seed0 = {'id': 0, 'stress': 100_000, 'long': 200_000}[split]
+for split, n in [(a, int(b)) for a, b in (x.split(':') for x in (sys.argv[1:] or ['id:300', 'stress:300', 'long:32']))]:
+    seed0 = {'id': 0, 'stress': 100_000, 'long': 200_000, 'longfar': 210_000}[split]
     eps = [gen_episode(random.Random(seed0 + i), split) for i in range(n)]
     for p in PROTOCOLS:
         with open(f'runs/oracle_{p}_{split}.jsonl', 'w') as f:

@@ -105,7 +105,7 @@ Prefrontal control & Design assumption (no specific finding tested): ongoing tho
 \section{Method}\label{sec:method}
 \paragraph{Model.} Let $x_{1:t}$ be the token stream and $c_{1:t}$ the channel of each token: an output channel (think, say, write, code, exec, mem or idle) for generated tokens, or an input channel (sys, user, tool or see) for inserted tokens. The input at position $i$ is $e(x_i)+g(c_i)$, where $e$ is the pretrained token embedding and $g$ a learned channel embedding initialised to zero, so training starts from the unmodified pretrained model. A decoder-only transformer produces $h_t$; the LM head gives $p(x_{t+1}\mid h_t)$ and the router gives $p(c_{t+1}\mid h_t)=\mathrm{softmax}(W_r h_t)$, $W_r\in\mathbb{R}^{7\times d}$. At inference both are decoded greedily; if the router selects idle, no content token is emitted.
 
-\paragraph{Clock, idle and events.} One generated token consumes one tick. Each event has an arrival tick; when the clock reaches it, the event's tokens are inserted into the stream (one per forward step, taking no model ticks) before the model generates again. An idle step advances the clock to the next pending event. An episode ends when the environment has no further events and all tasks are resolved, or at a step cap; the model itself never stops.
+\paragraph{Clock, idle and events.} One generated token consumes one tick. Functionally, idle is an EOS that the model itself resumes from: in a controller-based system the same behaviour requires stopping generation and re-prompting when the next event arrives, which is what the turn-based and orchestrator baselines do; we therefore did not run a separate idle-versus-EOS ablation. Each event has an arrival tick; when the clock reaches it, the event's tokens are inserted into the stream (one per forward step, taking no model ticks) before the model generates again. An idle step advances the clock to the next pending event. An episode ends when the environment has no further events and all tasks are resolved, or at a step cap; the model itself never stops.
 
 \paragraph{Outputs.} Each channel keeps its own line buffer; a completed line on say, write or code is a user-visible answer; a completed exec line is a tool call (calc, lookup, or run code) whose result returns after a sampled latency; think and mem lines are internal.
 
@@ -126,14 +126,14 @@ Prefrontal control & Design assumption (no specific finding tested): ongoing tho
 Oracle ceilings are reported for every arm. The turn-based ceiling is low by construction on deadline tasks; it measures what that protocol can express, not a weakness of a particular implementation.
 
 \section{Experimental setup}\label{sec:setup}
-Base model: Qwen3-0.6B \citep{yang2025qwen3} (Apache-2.0 licence), full fine-tuning, bf16 autocast with fp32 master weights, AdamW (learning rate $5\times10^{-5}$; $10^{-3}$ for new parameters), cosine schedule, one epoch over 12{,}000 id episodes plus 600 long episodes $\times$ 4 eviction views (7.4--8.3\,M tokens per arm), 16k tokens per batch, one NVIDIA RTX 4090 (24\,GB) per run (about 13\,min per run; all experiments used under 30 GPU-hours). No hyperparameters were tuned for any arm. Every arm was trained with three seeds. Evaluation was closed-loop and greedy, with batched rollouts in which each sequence advances exactly one token per step. Metrics: task success; episode success (all tasks correct); success by category (quick, cancel, revise, plain); median quick latency; generated tokens. Statistics: mean over seeds of the per-episode mean; 95\% CIs from 2000 bootstrap resamples of test episodes, paired across arms because all arms see the same episodes. The hypotheses (H1--H4 below) and these choices were written down before the main results (\texttt{paper/method\_notes.md}); they were not registered externally. The bootstrap CIs reflect sampling of test episodes, not variation across training seeds; we therefore also report per-seed values. We report uncorrected $p$-values; only the in-distribution task-success and quick-task comparisons are confirmatory, and stress, latency, token and multimodal analyses should be read as exploratory.
+Base model: Qwen3-0.6B \citep{yang2025qwen3} (Apache-2.0 licence), full fine-tuning, bf16 autocast with fp32 master weights, AdamW (learning rate $5\times10^{-5}$; $10^{-3}$ for new parameters), cosine schedule, one epoch over 12{,}000 id episodes plus 600 long episodes $\times$ 4 eviction views (7.4--8.3\,M tokens per arm), 16k tokens per batch, one NVIDIA RTX 4090 (24\,GB) per run (about 13\,min per run; all experiments used under 30 GPU-hours). No hyperparameters were tuned for any arm. Every arm was trained with three seeds. Evaluation was closed-loop and greedy, with batched rollouts in which each sequence advances exactly one token per step. Metrics: task success; episode success (all tasks correct); success by category (quick, cancel, revise, plain); median quick latency; generated tokens. Statistics: mean over seeds of the per-episode mean; 95\% CIs from 2000 bootstrap resamples of test episodes, paired across arms because all arms see the same episodes. The hypotheses (H1--H4 below) and these choices were written down before the main results (\texttt{paper/method\_notes.md}); they were not registered externally. The bootstrap CIs reflect sampling of test episodes, not variation across training seeds; we therefore also report per-seed values. The confirmatory family was the six in-distribution comparisons of task and quick-task success between the router and each comparator, which we report with Holm correction; other $p$-values are uncorrected, and and stress, latency, token and multimodal analyses should be read as exploratory.
 
 \paragraph{Hypotheses.} \textbf{H1}: with asynchronous delivery fixed, the router matches or beats in-stream tags with fewer tokens and lower latency. \textbf{H2}: the router beats the orchestrator on quick tasks and latency. \textbf{H3}: router and tags beat the turn-based loop on interrupt categories. \textbf{H4}: under eviction, mem-routed retention beats a plain sliding window on revisions and cancellations.
 
 \section{Results}\label{sec:results}
 \begin{table}[t]
 \centering\scriptsize\setlength{\tabcolsep}{3pt}
-\caption{Main results (mean over 3 seeds, 95\% bootstrap CI over episodes). Success in \%; latency in ticks (median per episode); tokens generated per episode. Grey rows: the scripted oracle for the same protocol.}
+\caption{Main results (mean over training seeds, number in column 2; 95\% bootstrap CI over episodes). Success in \%; latency in ticks (median per episode); tokens generated per episode. Grey rows: the scripted oracle for the same protocol.}
 \label{tab:main}
 \resizebox{\linewidth}{!}{\input{gen/tab_main.tex}}
 \end{table}
@@ -141,13 +141,13 @@ Base model: Qwen3-0.6B \citep{yang2025qwen3} (Apache-2.0 licence), full fine-tun
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{figs/success.pdf}
-\caption{Success by category. Bars: mean of 3 seeds; error bars: 95\% bootstrap CI over 300 episodes; dotted lines: oracle ceiling for that protocol.}
+\caption{Success by category. Bars: mean over training seeds; error bars: 95\% bootstrap CI over 300 episodes; dotted lines: oracle ceiling for that protocol.}
 \label{fig:success}
 \end{figure}
 
-\paragraph{H1, router vs.\ tags.} In distribution, the router and tags reached the same success (Table~\ref{tab:main}; $\Delta$task \dtagsidtask\,pp, CI \dtagsidtaskci). Under stress the router was more accurate ($\Delta$task \dtagsstresstask\,pp, CI \dtagsstresstaskci; $\Delta$episode \dtagsstressepisode\,pp, CI \dtagsstressepisodeci) and in both splits it generated fewer tokens ($\Delta$ \dtagsidtokens\ and \dtagsstresstokens\ tokens per episode) and answered quick tasks earlier ($\Delta$ median latency \dtagsidquicklat\ and \dtagsstressquicklat\ ticks; Table~\ref{tab:diff}). The token saving equals the channel-switch tags the tag model must spell out. Per seed, stress task success was 98.6, 96.7 and 97.8\% for the router and 98.4, 95.5 and 96.3\% for tags, so the router was ahead for each seed but the seed-to-seed spread (about 2\,pp) was larger than the difference. H1 was supported for tokens and latency; success was equivalent in distribution and marginally higher under stress.
+\paragraph{H1, router vs.\ tags.} In distribution, the router and tags reached the same success (Table~\ref{tab:main}; $\Delta$task \dtagsidtask\,pp, CI \dtagsidtaskci; Holm-adjusted $p=\holmtagstask$). Under stress the router was more accurate ($\Delta$task \dtagsstresstask\,pp, CI \dtagsstresstaskci; $\Delta$episode \dtagsstressepisode\,pp, CI \dtagsstressepisodeci) and in both splits it generated fewer tokens ($\Delta$ \dtagsidtokens\ and \dtagsstresstokens\ tokens per episode) and answered quick tasks earlier ($\Delta$ median latency \dtagsidquicklat\ and \dtagsstressquicklat\ ticks; Table~\ref{tab:diff}). The token saving equals the channel-switch tags the tag model must spell out. Across training seeds (Table~\ref{tab:seeds}), the standard deviation of stress task success was \seedrouterstresssd\,pp for the router and \seedtagsstresssd\,pp for tags, as large as the difference, so the stress advantage should be read as tentative. H1 was supported for tokens and latency; success was equivalent in distribution and marginally higher under stress.
 
-\paragraph{H2, router vs.\ orchestrator.} In distribution the router beat the orchestrator on quick tasks ($\Delta$ \dorchidquick\,pp, CI \dorchidquickci) and overall ($\Delta$ \dorchidtask\,pp, CI \dorchidtaskci) because the orchestrator can only react at line boundaries or by abandoning a thought. Under stress, quick-task success still favoured the router ($\Delta$ \dorchstressquick\,pp, CI \dorchstressquickci) and the router used \dorchstresstokens\ fewer tokens per episode, but overall task success did not differ ($\Delta$ \dorchstresstask\,pp, CI \dorchstresstaskci) and episode success (all tasks of an episode correct) favoured the orchestrator ($\Delta$ \dorchstressepisode\,pp, CI \dorchstressepisodeci). The orchestrator restarts abandoned thoughts from the beginning, which costs tokens but rarely leaves a half-finished line on a channel. Per seed, stress task success for the orchestrator was 97.5, 98.1 and 98.5\%, so the router was ahead for one seed of three. H2 was supported for latency and quick tasks, not for overall success under stress.
+\paragraph{H2, router vs.\ orchestrator.} In distribution the router beat the orchestrator on quick tasks ($\Delta$ \dorchidquick\,pp, CI \dorchidquickci) and overall ($\Delta$ \dorchidtask\,pp, CI \dorchidtaskci) because the orchestrator can only react at line boundaries or by abandoning a thought. Under stress, quick-task success still favoured the router ($\Delta$ \dorchstressquick\,pp, CI \dorchstressquickci) and the router used \dorchstresstokens\ fewer tokens per episode, but overall task success did not differ ($\Delta$ \dorchstresstask\,pp, CI \dorchstresstaskci) and episode success (all tasks of an episode correct) favoured the orchestrator ($\Delta$ \dorchstressepisode\,pp, CI \dorchstressepisodeci). The orchestrator restarts abandoned thoughts from the beginning, which costs tokens but rarely leaves a half-finished line on a channel. Seed-level results (Table~\ref{tab:seeds}) agree that the two protocols are close under stress. H2 was supported for latency and quick tasks, not for overall success under stress.
 
 \paragraph{H3, vs.\ turn-based.} The turn-based loop solved plain tasks and revisions but could not meet deadlines or honour cancellations that arrived while it was blocked (quick success \turnidquick\% in distribution, \turnstressquick\% under stress, close to its oracle ceiling of \oracleturnidquick\% and \oracleturnstressquick\%). H3 was supported by a wide margin; the size of the gap is a property of the protocol and the environment's deadlines rather than of model quality.
 
@@ -202,7 +202,7 @@ The results support a narrow claim: in a controlled environment, a small LLM can
 \section{Limitations}
 \begin{itemize}\itemsep0pt
 \item \textbf{Synthetic tasks and imitation.} AsyncWorld is small and scripted; all arms imitate scripted oracles; models came within about a point of their oracle ceilings on task success in distribution, but under stress the router's episode success was \routerstressepisode\% against an oracle ceiling of \oraclerouterstressepisode\%; differences between arms partly reflect the design of each protocol's oracle rather than learned strategies.
-\item \textbf{Scale.} One 0.6B model, one epoch, three seeds; the multimodal model has one seed. Effects may differ at scale.
+\item \textbf{Scale.} One 0.6B model, one epoch, three to five seeds per arm; the multimodal model has one seed. Effects may differ at scale.
 \item \textbf{Missing baselines.} We did not compare against published agent systems \citep{li2026never} on their benchmarks, did not ablate idle against EOS, and did not train a matched plain-SFT model on the same GSM8K rationales.
 \item \textbf{Baselines.} The orchestrator and turn-based arms are our implementations of these control styles, trained on the same data; they are not the published systems \citep{li2026never,yao2022react}.
 \item \textbf{Oracle corrections.} During the study we found that the oracle could suspend a say line for a quick answer on the same channel, which merged two lines in about 12\% of router and tags episodes. We fixed the oracle, rebuilt the data and retrained all affected arms; superseded checkpoints and runs were archived. A related resume-order error in the multimodal oracle was fixed before that model was trained.
@@ -221,4 +221,42 @@ Replacing the stop token with a learned idle action, routing every token to an o
 
 \bibliographystyle{plainnat}
 \bibliography{refs}
+
+\appendix
+\section{Example trace}\label{app:trace}
+Table~\ref{tab:trace} shows the first in-distribution test episode for router seed~0, as generated in closed loop. Consecutive tokens with the same source and channel are merged; $\hookleftarrow$ marks a newline, which completes a line on that channel. Inputs are inserted wherever they arrive: the cancellation of T2 interrupts a thought, the requests for T4 and T5 arrive in the middle of think lines, and the quick task T6 arrives in the middle of a mem line, which the model suspends, answers on say, and then completes.
+\begin{table}[h]
+\centering\scriptsize
+\caption{Closed-loop trace (router, seed 0, test episode 0).}
+\label{tab:trace}
+\input{gen/trace.tex}
+\end{table}
+
+\section{Seed-level results}\label{app:seeds}
+\begin{table}[h]
+\centering\small
+\caption{Task success per training seed and across seeds (mean, SD and $t$-based 95\% CI over seeds).}
+\label{tab:seeds}
+\resizebox{\linewidth}{!}{\input{gen/tab_seeds.tex}}
+\end{table}
+
+\section{Training details}\label{app:train}
+\begin{table}[h]
+\centering\small
+\caption{Training and evaluation settings (identical for all arms unless noted).}
+\begin{tabular}{ll}
+\toprule
+Base model & Qwen3-0.6B, full fine-tuning, tied embeddings \\
+New parameters & channel embedding (zero init), router $\mathrm{Linear}(1024,7)$; tag tokens for tag arms \\
+Optimiser & AdamW, $\beta=(0.9,0.95)$, no weight decay, lr $5\times10^{-5}$ (new parameters $10^{-3}$) \\
+Schedule & 30-step warm-up, cosine decay, 1 epoch \\
+Batch & length-bucketed, 16{,}384 tokens (multimodal: 12{,}288) \\
+Precision & fp32 master weights, bf16 autocast, gradient checkpointing \\
+Training data & 12{,}000 id episodes + 600 long episodes $\times$ 4 eviction views; 7.4--8.3\,M tokens per arm \\
+Context & cap 1024 tokens; recent window 640; mem budget 192 \\
+Decoding & greedy; step cap 3000 (9000 for long episodes) \\
+Hardware & one NVIDIA RTX 4090 per run; about 13\,min per training run \\
+\bottomrule
+\end{tabular}
+\end{table}
 \end{document}

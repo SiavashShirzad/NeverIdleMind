@@ -1,0 +1,43 @@
+\begin{tabular}{llp{11.5cm}}
+\toprule
+Source & Channel & Tokens \\
+\midrule
+\textbf{model} & \texttt{idle} & \texttt{\textless{}|idle|\textgreater{}} \\
+\textit{input} & \texttt{user} & \texttt{T1 quick: 9+5? $\hookleftarrow$} \\
+\textbf{model} & \texttt{say} & \texttt{T1: 14 $\hookleftarrow$} \\
+\textbf{model} & \texttt{idle} & \texttt{\textless{}|idle|\textgreater{}} \\
+\textit{input} & \texttt{user} & \texttt{T2 ask: what is the code for kiwi? $\hookleftarrow$} \\
+\textbf{model} & \texttt{think} & \texttt{T2 needs the code for kiwi. That needs the lookup tool; I will report it when the} \\
+\textit{input} & \texttt{user} & \texttt{cancel T2 $\hookleftarrow$} \\
+\textbf{model} & \texttt{think} & \texttt{The user cancelled T2} \\
+\textit{input} & \texttt{user} & \texttt{T3 ask: what is (83+81)*18? $\hookleftarrow$} \\
+\textbf{model} & \texttt{think} & \texttt{. I drop it and will ignore any result for it. $\hookleftarrow$} \\
+\textbf{model} & \texttt{mem} & \texttt{T2 cancelled $\hookleftarrow$} \\
+\textbf{model} & \texttt{think} & \texttt{T3} \\
+\textit{input} & \texttt{user} & \texttt{T4 code: count multiples of 7 below 17 $\hookleftarrow$} \\
+\textbf{model} & \texttt{think} & \texttt{wants (} \\
+\textit{input} & \texttt{user} & \texttt{T5 write: sort 49 91 87 73 54 $\hookleftarrow$} \\
+\textbf{model} & \texttt{think} & \texttt{83+81)*18. I should not do this in my head, so I will call calc and wait for the result. $\hookleftarrow$} \\
+\textbf{model} & \texttt{mem} & \texttt{T3 open calc (} \\
+\textit{input} & \texttt{user} & \texttt{T6 quick: 1+3? $\hookleftarrow$} \\
+\textbf{model} & \texttt{say} & \texttt{T6: 4 $\hookleftarrow$} \\
+\textbf{model} & \texttt{mem} & \texttt{83+81)*18 $\hookleftarrow$} \\
+\textbf{model} & \texttt{exec} & \texttt{T3 calc (83+81)*18 $\hookleftarrow$} \\
+\textbf{model} & \texttt{think} & \texttt{T4 needs the count multiples of 7 below 17. I will write one line of python, run it, and say the output. $\hookleftarrow$} \\
+\textbf{model} & \texttt{mem} & \texttt{T4 open code $\hookleftarrow$} \\
+\textbf{model} & \texttt{code} & \texttt{T4: print(len([i for i in range(1} \\
+\textit{input} & \texttt{tool} & \texttt{T3 calc (83+81)*18 = 2952 $\hookleftarrow$} \\
+\textbf{model} & \texttt{code} & \texttt{,17) if i\%7==0])) $\hookleftarrow$} \\
+\textbf{model} & \texttt{exec} & \texttt{T4 run $\hookleftarrow$} \\
+\textbf{model} & \texttt{say} & \texttt{T3: 2952 $\hookleftarrow$} \\
+\textbf{model} & \texttt{mem} & \texttt{T3 closed $\hookleftarrow$} \\
+\textbf{model} & \texttt{think} & \texttt{T5 is a sorting job for 49 91 87 73 5} \\
+\textit{input} & \texttt{tool} & \texttt{T4 output: 2 $\hookleftarrow$} \\
+\textbf{model} & \texttt{think} & \texttt{4. No tool needed; put them in increasing order and write them down. $\hookleftarrow$} \\
+\textbf{model} & \texttt{write} & \texttt{T5: 49 54 73 87 91 $\hookleftarrow$} \\
+\textbf{model} & \texttt{mem} & \texttt{T5 closed $\hookleftarrow$} \\
+\textbf{model} & \texttt{say} & \texttt{T4: 2 $\hookleftarrow$} \\
+\textbf{model} & \texttt{mem} & \texttt{T4 closed $\hookleftarrow$} \\
+\textbf{model} & \texttt{idle} & \texttt{\textless{}|idle|\textgreater{}} \\
+\bottomrule
+\end{tabular}

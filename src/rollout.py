@@ -145,7 +145,7 @@ def main():
     ap.add_argument('--protocol', default=None, help='override delivery protocol at test time')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
-    seed0 = {'id': 0, 'stress': 100_000, 'long': 200_000}[a.split]
+    seed0 = {'id': 0, 'stress': 100_000, 'long': 200_000, 'longfar': 210_000}[a.split]
     proto = a.protocol or ('router' if a.arm.startswith('router') else a.arm)
     T = Tok(load_tokenizer())
     m = ChannelLM(router=proto == 'router', tk=T.tk, dtype=torch.bfloat16,
@@ -154,7 +154,7 @@ def main():
         m.load_state_dict(torch.load(a.ckpt, map_location='cuda'))
     eps = [gen_episode(random.Random(seed0 + i), a.split) for i in range(a.n)]
     res, t0 = [], time.time()
-    max_steps = 9000 if a.split == 'long' else 3000
+    max_steps = 9000 if a.split.startswith('long') else 3000
     with open(a.out, 'w') as f:
         for i in range(0, a.n, a.bs):
             seqs = run_batch(m, T, eps[i:i + a.bs], proto, a.evict, max_steps)

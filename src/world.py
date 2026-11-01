@@ -72,6 +72,8 @@ CFG = {
                    lat=(10, 60), off=(3, 40)),
     'long': dict(n_tasks=(28, 32), horizon=3000, n_quick=(5, 7), n_cancel=(3, 5), n_revise=(3, 5),
                  lat=(20, 150), off=(40, 300)),
+    'longfar': dict(n_tasks=(28, 32), horizon=3000, n_quick=(5, 7), n_cancel=(3, 5), n_revise=(3, 5),
+                    lat=(20, 150), off=(700, 1500)),  # memory stress: revisions arrive after the task has been evicted
 }
 
 

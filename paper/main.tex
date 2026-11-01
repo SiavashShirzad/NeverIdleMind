@@ -1,0 +1,224 @@
+\documentclass[10pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern,microtype,booktabs,graphicx,xcolor,amsmath,amssymb}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+\input{gen/numbers.tex}
+\providecommand{\gsmthinkclause}{}
+\providecommand{\TODO}{\textbf{??}}
+
+\title{An Always-On Language Model with a Learned Output Router:\\
+Routing Thought, Speech, Writing, Code and Action from a Single Stream}
+\author{Siavash Shirzadeh Barough\\\small Preprint}
+\date{\small October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Large language models (LLMs) are usually run as turn-based generators that stop at an end-of-sequence (EOS) token and are wrapped in external agent loops that decide when to think, speak, call a tool, or wait. We propose and test a simpler organisation, inspired by the functional layout of the brain, in which sensory inputs, an ongoing stream of thought and several executive outputs share one continuous workspace, and a selection mechanism decides, token by token, which output a computation drives. A decoder-only LLM emits a single token stream; a small learned \emph{router head} assigns every generated token to one of seven channels (think, say, write, code, exec, mem, idle); EOS is replaced by an \emph{idle} channel, so the model never terminates and waits for the next event; external events (user messages, tool results, images) are inserted into the stream at the time they arrive, including mid-thought; and tokens routed to a \emph{mem} channel are retained when old context is evicted. We fine-tuned Qwen3-0.6B by imitation of scripted policies in AsyncWorld, a synthetic environment with concurrent tasks, deadlines, cancellations, revisions and asynchronous tools, and compared the router with three control protocols trained on identical episodes: in-stream channel tags, a rule-based orchestrator that delivers events only at line boundaries, and a turn-based agent loop (3 seeds per arm, 300 test episodes per split). The router matched tags in distribution (task success \routeridtask\% vs.\ \tagsidtask\%) and was slightly more accurate on a heavier, out-of-distribution load (\dtagsstresstask\,pp, 95\% CI \dtagsstresstaskci\ over episodes; smaller than the seed-to-seed spread), while saving the tokens that tags spend on channel switches. Compared with the orchestrator, it answered deadline-bound requests more often in distribution (\dorchidquick\,pp) with fewer tokens, but under the heavier load overall task success was similar and whole-episode success was lower (\dorchstressepisode\,pp, CI \dorchstressepisodeci). The turn-based loop, which by construction cannot respond while blocked, met few deadlines (\turnidquick\% vs.\ \routeridquick\%). In a multimodal pilot with a frozen CLIP-ConvNeXt image encoder and self-distilled GSM8K rationales routed to the think channel, one router model answered \visall\% of visual questions on held-out synthetic scenes and solved \gsmsolo\% of GSM8K problems, comparable to the base model's built-in thinking mode (\gsmbasethink\%); urgent requests arriving mid-thought were answered on time (\gsmasyncquick\%) but reduced math accuracy by \gsmdiff\,pp (CI \gsmdiffci). Retaining mem-routed tokens did not change long-horizon success, as the environment rarely required information older than the recent context window. These small-scale, synthetic results show that output routing, waiting and interruption handling can be learned inside the model rather than hard-coded around it; they do not show benefits on natural tasks or at scale.
+\end{abstract}
+
+\section{Introduction}
+A human does not alternate between a ``thinking program'' and a ``speaking program'' orchestrated from outside. Perception, ongoing thought and action run concurrently, and a person can stop mid-thought to answer a question, resume, wait, or remember to finish a task later. Current LLM agents obtain similar behaviour through scaffolding: the model generates until EOS, and an external controller parses the output, routes it to tools or the user, decides when the model may continue, and re-prompts it with new observations \citep{yao2022react,schick2023toolformer,packer2023memgpt}. This scaffolding is hand-written, turn-based, and blind to the model's internal state, so the model cannot be interrupted between turns and cannot keep thinking while it waits.
+
+We ask whether this control can be moved inside the model with minimal machinery. Our proposal has four components:
+\begin{enumerate}\itemsep0pt
+\item \textbf{One stream, many outputs.} The model emits one token per tick. A linear router head on the final hidden state predicts the output channel of each token (think, say, write, code, exec, mem, idle). Channel identity is fed back through a learned channel embedding, so the model knows which ``effector'' produced each past token.
+\item \textbf{No stop token.} EOS is removed from the action space and replaced by an \emph{idle} channel. Idle advances the clock to the next event; the model never terminates.
+\item \textbf{Event-timed inputs.} User messages, tool results and images are inserted into the stream at the tick at which they arrive, even in the middle of a line of thought, and training sequences contain such insertions, so the model learns to react to them without an external controller.
+\item \textbf{Memory by routing.} Tokens routed to the mem channel are retained when old context is evicted, giving a learned, content-addressed retention policy under a fixed context budget.
+\end{enumerate}
+
+The design is motivated by a coarse functional analogy to the brain (Section~\ref{sec:brain}): a shared workspace that broadcasts to many specialised processors \citep{baars1988cognitive,dehaene1998neuronal}, a selection system that gates one action among competing ones \citep{mink1996basal,redgrave1999basal}, intrinsic activity that persists without external input \citep{raichle2001default}, and a separate system for retaining selected episodes \citep{mcclelland1995why}. We use the analogy to generate design hypotheses, not as a claim of biological fidelity.
+
+Throughout, time is measured in \emph{ticks}: one generated token takes one tick, inserted input tokens take none, and waiting (idle) advances the clock to the next event; latency is the number of ticks between a request's arrival and its answer. Training data come from an \emph{oracle}, a hand-written scripted policy for each control protocol, whose own score gives an upper reference (``oracle ceiling'') for a model that imitates it.
+
+\paragraph{Contributions.} (i) An architecture and training recipe for an always-on LLM with a learned per-token output router, an idle channel in place of EOS, event-timed input insertion, and mem-routed retention. (ii) AsyncWorld, a controlled benchmark with concurrent tasks, deadlines, cancellations, revisions and asynchronous tools, together with scripted oracle policies for four control protocols. (iii) A comparison with hypotheses specified before the main runs against in-stream tags, a rule-based orchestrator and a turn-based loop at equal data, with three seeds per arm and paired bootstrap CIs. (iv) A multimodal pilot in which vision and step-by-step math reasoning share the same routed stream.
+
+\section{Related work}\label{sec:related}
+\paragraph{Continuous and asynchronous LLM agents.} The closest work trains a single think/say/tool stream for continuous-time agents, but an external orchestrator of about 200 lines ``alone knows the clock'', forces the end of thoughts, and injects events at interrupt points as chat turns \citep{li2026never}. Multi-Stream LLMs decode several role-fixed streams in lockstep with per-stream positions and stream embeddings; streams are fixed rather than learned \citep{su2026multistream}. Asynchronous Reasoning lets a thinker and a writer share one KV cache, with the writer gated by an inserted probe every paragraph, training-free \citep{yakushev2025asynchronous}. Asynchronous function calling \citep{gim2024asynclm,shi2026asynctool} and interruptibility benchmarks \citep{wu2025interruptible,zou2026users} study how agents handle tools and users that change their minds. Parallel decoding methods (Hogwild!, Multiverse) run several reasoning threads concurrently \citep{rodionov2025hogwild,yang2025multiverse}. Our design differs in that channel selection is a learned per-token decision on one stream, termination is replaced by a learned idle action, and inputs are inserted at their arrival tick without a controller.
+
+\paragraph{Full-duplex dialogue.} Spoken dialogue models listen and speak simultaneously \citep{defossez2024moshi,veluri2024syncllm,ma2024lslm,zhang2024beyond}, and SHANKS lets a spoken model think while listening \citep{chiang2025shanks}. A recent duplex agent uses a learned per-second control token (listen/speak/interrupt) and delegates tasks to a separate agent \citep{orantqing2026gander}. These systems route between at most a few speech states at a coarse time step; we route every token among seven text-level channels including thought, code and memory.
+
+\paragraph{Latent and hidden reasoning.} Pause tokens \citep{goyal2023pause}, Quiet-STaR \citep{zelikman2024quietstar} and continuous latent reasoning \citep{hao2024coconut} separate internal computation from output. STaR bootstraps rationales from a model's own correct answers \citep{zelikman2022star}; we use the same idea to obtain think-channel content.
+
+\paragraph{Workspace models in deep learning.} Global-workspace ideas have been proposed for deep networks \citep{vanrullen2021deep} and implemented as a shared bottleneck among neural modules \citep{goyal2021coordination}. Our model uses a pretrained LLM as the shared workspace and adds a router as the selection mechanism.
+
+\paragraph{Memory.} MemGPT manages memory through explicit function calls issued by the model and executed by a controller \citep{packer2023memgpt}. Our mem channel is an output like any other; retention is a side effect of routing.
+
+\section{A brain-inspired organisation}\label{sec:brain}
+Figure~\ref{fig:arch} and Table~\ref{tab:brain} summarise the analogy that guided the design. We list the neuroscience findings that motivated each component and state explicitly what we did and did not implement. The analogy is functional and coarse; we do not claim that the network computes as the brain does.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\small, node distance=4mm and 6mm,
+  box/.style={draw, rounded corners=2pt, minimum height=6.5mm, inner sep=3pt, align=center},
+  sense/.style={box, fill=gray!8}, chan/.style={box, fill=blue!6}, ar/.style={-{Stealth[length=2mm]}}]
+\node[sense] (see) {see\\\scriptsize frozen CLIP-ConvNeXt\\\scriptsize 16 tokens/image};
+\node[sense, below=of see] (read) {read\\\scriptsize user / tool text};
+\node[sense, below=of read, dashed] (hear) {hear\\\scriptsize (future work)};
+\node[box, right=12mm of read, minimum width=36mm, minimum height=28mm, fill=gray!3] (ws) {};
+\node[align=center, font=\small] at ([yshift=8mm]ws.center) {shared stream\\\scriptsize Qwen3-0.6B, 1 token / tick};
+\node[box, fill=white] at ([yshift=-4mm]ws.center) (emb) {\scriptsize token emb. + channel emb.};
+\node[box, right=10mm of ws, fill=orange!10] (router) {router\\\scriptsize Linear($d$, 7)\\\scriptsize per token};
+\node[chan, right=10mm of router, yshift=17mm] (think) {think};
+\node[chan, below=1.5mm of think] (say) {say};
+\node[chan, below=1.5mm of say] (write) {write};
+\node[chan, below=1.5mm of write] (code) {code};
+\node[chan, below=1.5mm of code] (exec) {exec};
+\node[chan, below=1.5mm of exec] (mem) {mem};
+\node[chan, below=1.5mm of mem, fill=gray!10] (idle) {idle};
+\draw[ar] (see) -- (ws); \draw[ar] (read) -- (ws); \draw[ar, dashed] (hear) -- (ws);
+\draw[ar] (ws) -- (router);
+\foreach \n in {think,say,write,code,exec,mem,idle} \draw[ar] (router.east) -- (\n.west);
+\draw[ar, gray] (think.north) -- ++(0,4mm) -| node[pos=0.25, above, font=\scriptsize, text=black] {every output token re-enters the stream with its channel} (ws.north);
+\draw[ar, gray] (exec.east) -- ++(5mm,0) |- ([yshift=-8mm]idle.south) -| node[pos=0.25, below, font=\scriptsize, text=black]{tool results arrive later and are inserted at their arrival tick} ([xshift=-5mm]hear.west) |- (read.west);
+\end{tikzpicture}
+\caption{Architecture. Senses write tokens into one stream; the router assigns each generated token to an output channel; all tokens, including inputs inserted mid-thought, are fed back with a channel embedding. There is no stop token: idle waits for the next event, and mem-routed tokens are kept when old context is evicted.}
+\label{fig:arch}
+\end{figure}
+
+\begin{table}[t]
+\centering\small
+\caption{Functional analogy used as a design guide. ``Implemented'' describes this paper's model; the right-hand column lists the source of the motivating finding.}
+\label{tab:brain}
+\begin{tabular}{p{3.0cm}p{5.0cm}p{5.6cm}}
+\toprule
+Brain system & Motivating finding & Implemented here \\
+\midrule
+Sensory cortices & Specialised encoders feed a common representational space & Frozen CLIP-ConvNeXt image encoder \citep{liu2022convnext,radford2021clip} projected to 16 stream tokens; text inputs on user/tool channels; hearing not implemented \\
+Global workspace & Information becomes globally available to many processors via a shared, limited-capacity workspace \citep{baars1988cognitive,dehaene1998neuronal} & One causal token stream that every input writes into and every output reads from \\
+Basal ganglia & Focused selection of one action and inhibition of competitors \citep{mink1996basal,redgrave1999basal} & Router head selecting one channel per token; idle acts as ``no action'' \\
+Intrinsic activity & The brain is active in the absence of tasks; a default mode of function \citep{raichle2001default} & No EOS; the model idles and resumes rather than terminating \\
+Hippocampal system & Selected episodes are stored separately from the slowly changing cortical store \citep{mcclelland1995why} & Mem-routed tokens survive context eviction \\
+Prefrontal control & Design assumption (no specific finding tested): ongoing thoughts can be interrupted and resumed when urgent stimuli arrive & Event-timed insertion; training traces in which thoughts are suspended and resumed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Method}\label{sec:method}
+\paragraph{Model.} Let $x_{1:t}$ be the token stream and $c_{1:t}$ the channel of each token: an output channel (think, say, write, code, exec, mem or idle) for generated tokens, or an input channel (sys, user, tool or see) for inserted tokens. The input at position $i$ is $e(x_i)+g(c_i)$, where $e$ is the pretrained token embedding and $g$ a learned channel embedding initialised to zero, so training starts from the unmodified pretrained model. A decoder-only transformer produces $h_t$; the LM head gives $p(x_{t+1}\mid h_t)$ and the router gives $p(c_{t+1}\mid h_t)=\mathrm{softmax}(W_r h_t)$, $W_r\in\mathbb{R}^{7\times d}$. At inference both are decoded greedily; if the router selects idle, no content token is emitted.
+
+\paragraph{Clock, idle and events.} One generated token consumes one tick. Each event has an arrival tick; when the clock reaches it, the event's tokens are inserted into the stream (one per forward step, taking no model ticks) before the model generates again. An idle step advances the clock to the next pending event. An episode ends when the environment has no further events and all tasks are resolved, or at a step cap; the model itself never stops.
+
+\paragraph{Outputs.} Each channel keeps its own line buffer; a completed line on say, write or code is a user-visible answer; a completed exec line is a tool call (calc, lookup, or run code) whose result returns after a sampled latency; think and mem lines are internal.
+
+\paragraph{Training objective.} We fine-tune on oracle traces with $\mathcal{L}=\sum_t \mathbb{1}[c_t\neq\text{idle}]\,\mathrm{CE}(x_t)+\sum_t \mathrm{CE}(c_t)$ over generated positions only; inserted input tokens are context, not targets.
+
+\paragraph{Memory under eviction.} With a context cap of 1024 tokens, when the history exceeds the cap the model keeps the system prompt, the most recent 640 tokens and, under the \emph{mem} policy, up to 192 earlier tokens that were routed to mem. The \emph{plain} policy keeps only the recent window. Training includes long episodes viewed through both policies.
+
+\section{AsyncWorld and baselines}\label{sec:world}
+\paragraph{Tasks.} Each episode samples concurrent tasks arriving at random ticks: \emph{calc} (arithmetic via the calc tool), \emph{lookup} (a code word via the lookup tool), \emph{write} (sort numbers, answered on write), \emph{code} (write a one-line Python expression on code and execute it), and \emph{quick} (a one-step sum that must be answered on say within 24 ticks). Cancellations (``cancel T$n$'') must be honoured within a 10-tick grace; revisions (``T$n$ change 88 to 24'') require the corrected answer. Tool latencies are 10--50 ticks in distribution (\emph{id}: 3--5 tasks, 300 episodes), 10--60 under \emph{stress} (6--8 tasks with more cancellations and revisions, out of the training distribution, 300 episodes), and 20--150 in \emph{long} episodes (28--32 tasks over 3000 ticks, 32 episodes).
+
+\paragraph{Oracle and protocols.} A scripted policy produces training traces for four protocols on identical episodes. Each protocol has its own oracle so every arm imitates the best policy it can express:
+\begin{itemize}\itemsep0pt
+\item \textbf{Router (ours):} channels by router head; events inserted at their arrival tick; thoughts preempted by urgent events; partially written lines suspended and resumed for a quick task.
+\item \textbf{In-stream tags:} the same delivery and policy, but channel switches are special tokens (e.g.\ \texttt{<|think|>}) in the text. This isolates the channel-selection mechanism (router head and channel embedding vs.\ tag tokens) from asynchronous delivery.
+\item \textbf{Orchestrator:} events are delivered only at line boundaries, or during a thought, which is then abandoned and restarted, mimicking an external controller that preempts generation \citep{li2026never}.
+\item \textbf{Turn-based:} one user message at a time; tool calls block until the result returns; equivalent to a ReAct-style loop \citep{yao2022react}.
+\end{itemize}
+Oracle ceilings are reported for every arm. The turn-based ceiling is low by construction on deadline tasks; it measures what that protocol can express, not a weakness of a particular implementation.
+
+\section{Experimental setup}\label{sec:setup}
+Base model: Qwen3-0.6B \citep{yang2025qwen3} (Apache-2.0 licence), full fine-tuning, bf16 autocast with fp32 master weights, AdamW (learning rate $5\times10^{-5}$; $10^{-3}$ for new parameters), cosine schedule, one epoch over 12{,}000 id episodes plus 600 long episodes $\times$ 4 eviction views (7.4--8.3\,M tokens per arm), 16k tokens per batch, one NVIDIA RTX 4090 (24\,GB) per run (about 13\,min per run; all experiments used under 30 GPU-hours). No hyperparameters were tuned for any arm. Every arm was trained with three seeds. Evaluation was closed-loop and greedy, with batched rollouts in which each sequence advances exactly one token per step. Metrics: task success; episode success (all tasks correct); success by category (quick, cancel, revise, plain); median quick latency; generated tokens. Statistics: mean over seeds of the per-episode mean; 95\% CIs from 2000 bootstrap resamples of test episodes, paired across arms because all arms see the same episodes. The hypotheses (H1--H4 below) and these choices were written down before the main results (\texttt{paper/method\_notes.md}); they were not registered externally. The bootstrap CIs reflect sampling of test episodes, not variation across training seeds; we therefore also report per-seed values. We report uncorrected $p$-values; only the in-distribution task-success and quick-task comparisons are confirmatory, and stress, latency, token and multimodal analyses should be read as exploratory.
+
+\paragraph{Hypotheses.} \textbf{H1}: with asynchronous delivery fixed, the router matches or beats in-stream tags with fewer tokens and lower latency. \textbf{H2}: the router beats the orchestrator on quick tasks and latency. \textbf{H3}: router and tags beat the turn-based loop on interrupt categories. \textbf{H4}: under eviction, mem-routed retention beats a plain sliding window on revisions and cancellations.
+
+\section{Results}\label{sec:results}
+\begin{table}[t]
+\centering\scriptsize\setlength{\tabcolsep}{3pt}
+\caption{Main results (mean over 3 seeds, 95\% bootstrap CI over episodes). Success in \%; latency in ticks (median per episode); tokens generated per episode. Grey rows: the scripted oracle for the same protocol.}
+\label{tab:main}
+\resizebox{\linewidth}{!}{\input{gen/tab_main.tex}}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figs/success.pdf}
+\caption{Success by category. Bars: mean of 3 seeds; error bars: 95\% bootstrap CI over 300 episodes; dotted lines: oracle ceiling for that protocol.}
+\label{fig:success}
+\end{figure}
+
+\paragraph{H1, router vs.\ tags.} In distribution, the router and tags reached the same success (Table~\ref{tab:main}; $\Delta$task \dtagsidtask\,pp, CI \dtagsidtaskci). Under stress the router was more accurate ($\Delta$task \dtagsstresstask\,pp, CI \dtagsstresstaskci; $\Delta$episode \dtagsstressepisode\,pp, CI \dtagsstressepisodeci) and in both splits it generated fewer tokens ($\Delta$ \dtagsidtokens\ and \dtagsstresstokens\ tokens per episode) and answered quick tasks earlier ($\Delta$ median latency \dtagsidquicklat\ and \dtagsstressquicklat\ ticks; Table~\ref{tab:diff}). The token saving equals the channel-switch tags the tag model must spell out. Per seed, stress task success was 98.6, 96.7 and 97.8\% for the router and 98.4, 95.5 and 96.3\% for tags, so the router was ahead for each seed but the seed-to-seed spread (about 2\,pp) was larger than the difference. H1 was supported for tokens and latency; success was equivalent in distribution and marginally higher under stress.
+
+\paragraph{H2, router vs.\ orchestrator.} In distribution the router beat the orchestrator on quick tasks ($\Delta$ \dorchidquick\,pp, CI \dorchidquickci) and overall ($\Delta$ \dorchidtask\,pp, CI \dorchidtaskci) because the orchestrator can only react at line boundaries or by abandoning a thought. Under stress, quick-task success still favoured the router ($\Delta$ \dorchstressquick\,pp, CI \dorchstressquickci) and the router used \dorchstresstokens\ fewer tokens per episode, but overall task success did not differ ($\Delta$ \dorchstresstask\,pp, CI \dorchstresstaskci) and episode success (all tasks of an episode correct) favoured the orchestrator ($\Delta$ \dorchstressepisode\,pp, CI \dorchstressepisodeci). The orchestrator restarts abandoned thoughts from the beginning, which costs tokens but rarely leaves a half-finished line on a channel. Per seed, stress task success for the orchestrator was 97.5, 98.1 and 98.5\%, so the router was ahead for one seed of three. H2 was supported for latency and quick tasks, not for overall success under stress.
+
+\paragraph{H3, vs.\ turn-based.} The turn-based loop solved plain tasks and revisions but could not meet deadlines or honour cancellations that arrived while it was blocked (quick success \turnidquick\% in distribution, \turnstressquick\% under stress, close to its oracle ceiling of \oracleturnidquick\% and \oracleturnstressquick\%). H3 was supported by a wide margin; the size of the gap is a property of the protocol and the environment's deadlines rather than of model quality.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.55\linewidth]{figs/latency.pdf}
+\caption{Quick-task response latency under stress (all seeds; unanswered tasks at the right edge).}
+\label{fig:latency}
+\end{figure}
+
+\begin{table}[t]
+\centering\scriptsize\setlength{\tabcolsep}{3pt}
+\caption{Paired differences, router minus comparator (pp = percentage points; latency in ticks; tokens per episode). 95\% CI and two-sided bootstrap $p$ over the same 300 episodes.}
+\label{tab:diff}
+\resizebox{\linewidth}{!}{\input{gen/tab_diff.tex}}
+\end{table}
+
+\paragraph{Ablation: channel embedding.} Removing the channel embedding, so that the model sees past tokens without their channel, did not change success ($\Delta$task \drouternoembidtask\,pp, CI \drouternoembidtaskci in distribution; Table~\ref{tab:diff}). In AsyncWorld, channel identity can apparently be inferred from content (for example the ``T$n$:'' prefix and line structure), so this ablation does not establish that the embedding is necessary.
+
+\paragraph{H4, memory by routing.} Table~\ref{tab:long} and Figure~\ref{fig:long} report the long-horizon split (32 episodes of about 30 tasks, 1024-token cap). H4 was not supported: for the router, keeping mem-routed tokens and a plain sliding window gave the same task success ($\Delta$\,\dlongroutertask\,pp, CI \dlongroutertaskci; revisions \dlongrouterrevise\,pp, CI \dlongrouterreviseci; cancellations \dlongroutercancel\,pp, CI \dlongroutercancelci), and for tags the plain window was slightly better ($\Delta$\,\dlongtagstask\,pp, CI \dlongtagstaskci). A post-hoc stratification explains the null result: revisions and cancellations arriving more than 200 ticks after their task were solved as often as those arriving sooner under both policies (router, 99.0\% for both policies, $n=297$), so the information needed was still inside the 640-token recent window. AsyncWorld therefore did not stress retention, and with 32 episodes the test of H4 was inconclusive rather than a refutation. An unplanned finding was that \emph{not} evicting hurt: with the full, unbounded context (up to about 9k tokens, beyond the $\leq$1.2k-token training sequences) router task success fell to \longrouterfulltask\% from \longroutermemtask\%, and the model generated almost twice as many tokens (\longrouterfulltokens\ vs.\ \longroutermemtokens). We attribute this to a train/test length mismatch rather than to the method: without length generalisation or longer training sequences, an always-on model needs a bounded working context.
+
+\begin{table}[t]
+\centering\scriptsize\setlength{\tabcolsep}{3pt}
+\caption{Long-horizon episodes (32 episodes, about 30 tasks over 3000 ticks) under three context policies; mean of 3 seeds with 95\% CI.}
+\label{tab:long}
+\resizebox{\linewidth}{!}{\input{gen/tab_long.tex}}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figs/long.pdf}
+\caption{Long-horizon success by context policy.}
+\label{fig:long}
+\end{figure}
+
+\paragraph{Multimodal pilot: seeing and reasoning in the same stream.} To test whether diverse cognitive content can share the routed stream, we trained an additional router model on a mixture of AsyncWorld episodes, visual questions and GSM8K problems \citep{cobbe2021gsm8k}. Images (synthetic scenes of 1--6 coloured circles, squares and triangles) were encoded by a frozen CLIP-ConvNeXt-Base \citep{liu2022convnext,radford2021clip} trained on LAION-2B \citep{schuhmann2022laion5b,cherti2023openclip}; the $8\times8$ feature map was pooled to 16 tokens, mapped by a trained two-layer projector \citep{liu2023llava}, and inserted on a \emph{see} channel. Visual questions asked for counts by colour or shape, existence, or the colour of a unique shape; the oracle wrote a brief think line and the answer on say. For math, we generated rationales from the base model (non-thinking mode) and kept one correct rationale per training problem (4622 of 7473), following STaR \citep{zelikman2022star} without its rationalisation step (problems with no correct sample were dropped); the rationale was routed to think and the final number to say. Training followed the two-stage recipe of LLaVA \citep{liu2023llava}: stage~1 trained only the new parameters (projector, visual position, channel embedding, router) with the LLM frozen on 30{,}000 vision-only episodes of four questions each (6.7\,M tokens); stage~2 fine-tuned all parameters on 12{,}000 mixed AsyncWorld episodes (with up to one math problem and two images each) plus 15{,}000 vision episodes with concurrent tasks (11.2\,M tokens). A first model trained with stage~2 only, on the mixed episodes alone (12{,}000 visual questions), is reported as an ablation. To check that the frozen features contained the needed information, we fitted linear probes on the 16 pooled feature vectors of the 20{,}000 training images; on the 1000 test images they predicted per-colour and per-shape object counts with 92--97\% accuracy (majority baseline 37--43\%). At test time (first 300 GSM8K test problems; 300 vision episodes with two images each on held-out scenes) we measured math accuracy with no interruptions and with two quick tasks arriving 15--120 ticks after the problem, that is, typically mid-thought, which the model must answer within the deadline before resuming. Results are in Table~\ref{tab:mm}.
+
+\begin{table}[t]
+\centering\small
+\caption{Multimodal pilot (one seed per model). Accuracy in \%, bootstrap 95\% CI over items. Left: two-stage training (projector alignment, then full fine-tuning). Right: ablation trained without the alignment stage and with fewer visual examples.}
+\label{tab:mm}
+\input{gen/tab_mm.tex}
+\end{table}
+
+With two-stage training the single router model answered \visall\% of visual questions on held-out scenes (existence \visexists\%, colour of a unique shape \viscolorof\%, counting by colour \viscountcolor\%, counting by shape \viscountshape\%) while solving \visother\% of the concurrent non-visual tasks in the same episodes. Without the alignment stage, visual accuracy was \visallnoalign\% and the colour question was at chance (\viscolorofnoalign\% vs.\ 25\%), although the frozen features supported 92--97\% probe accuracy; the encoder was therefore not the limiting factor; because the ablation also had fewer visual examples, we cannot separate the effect of the alignment stage from that of more visual data. On GSM8K, routing self-distilled rationales to the think channel gave \gsmsolo\% without interruptions, compared with \gsmbase\% for the base model in non-thinking mode\gsmthinkclause; the router did not differ from thinking mode (paired $\Delta$\,\gsmvsthink\,pp, CI \gsmvsthinkci) while using a median of \gsmthinktok\ think tokens per problem. When two quick tasks arrived during the thought, the model answered \gsmasyncquick\% of them within the deadline and resumed, but math accuracy fell to \gsmasync\% (paired difference \gsmdiff\,pp, CI \gsmdiffci; $n=300$). Pausing and resuming a train of thought therefore had a measurable cost at this scale. AsyncWorld performance remained high with the added modalities (\mmidtask\% task success in distribution; text-only router \routeridtask\%, different seeds and task mixture).
+
+\section{Discussion}
+The results support a narrow claim: in a controlled environment, a small LLM can learn to select its own output channel token by token, to wait without terminating, and to handle interruptions at their arrival time, with no external controller and with task success close to its scripted teacher in distribution. A learned router head was as accurate as spelling channel tags into the text and avoided their token overhead. Relative to a rule-based orchestrator, in-model control mainly bought latency and tokens; overall success under heavy load was similar. The largest effect, against a turn-based loop, follows from what that protocol can express. The multimodal pilot showed that a visual sense and multi-step reasoning can be added to the same routed stream without degrading the agentic behaviour, provided the visual features are first aligned; it also exposed a cost of interrupting reasoning that a brain-like system would need to manage. The memory channel did not help in our environment, which leaves its value open.
+
+\paragraph{What the analogy suggests next.} The brain analogy points to experiments we did not run: (i) more senses (audio frames inserted on a hear channel at their arrival time; video as a sequence of image events); (ii) learned rather than scripted policies, by reinforcement learning on environment reward, since imitation caps performance at the oracle; (iii) richer think content (planning, hypothesis testing, critique) from stronger teachers; (iv) parallel effectors, for example speaking while writing, which a single stream can only interleave; (v) consolidation, in which mem-routed content is written to weights or an external store.
+
+\section{Limitations}
+\begin{itemize}\itemsep0pt
+\item \textbf{Synthetic tasks and imitation.} AsyncWorld is small and scripted; all arms imitate scripted oracles; models came within about a point of their oracle ceilings on task success in distribution, but under stress the router's episode success was \routerstressepisode\% against an oracle ceiling of \oraclerouterstressepisode\%; differences between arms partly reflect the design of each protocol's oracle rather than learned strategies.
+\item \textbf{Scale.} One 0.6B model, one epoch, three seeds; the multimodal model has one seed. Effects may differ at scale.
+\item \textbf{Missing baselines.} We did not compare against published agent systems \citep{li2026never} on their benchmarks, did not ablate idle against EOS, and did not train a matched plain-SFT model on the same GSM8K rationales.
+\item \textbf{Baselines.} The orchestrator and turn-based arms are our implementations of these control styles, trained on the same data; they are not the published systems \citep{li2026never,yao2022react}.
+\item \textbf{Oracle corrections.} During the study we found that the oracle could suspend a say line for a quick answer on the same channel, which merged two lines in about 12\% of router and tags episodes. We fixed the oracle, rebuilt the data and retrained all affected arms; superseded checkpoints and runs were archived. A related resume-order error in the multimodal oracle was fixed before that model was trained.
+\item \textbf{Interrupted reasoning.} Suspending a math rationale for urgent requests reduced GSM8K accuracy by \gsmdiff\,pp; the oracle resumes the thought verbatim, and the model may need explicit training to re-establish context after a pause.
+\item \textbf{Memory.} AsyncWorld rarely required information older than the recent window, so the mem-retention hypothesis was not tested in a regime where it could matter; the retention budget and window were fixed, not tuned; long-horizon results rest on 32 episodes.
+\item \textbf{Brain analogy.} The mapping in Table~\ref{tab:brain} is a design heuristic. We did not compare model activity with neural data.
+\end{itemize}
+
+\section{Ethics and broader impact}
+All data were synthetic or public (GSM8K, MIT licence \citep{cobbe2021gsm8k}); no human participants or personal data were involved. An always-on model that acts without an external controller moves safety-relevant decisions (when to call a tool, when to act) into learned weights; deployments would still need external permission checks and sandboxing of tool execution, which this design does not replace.
+
+\section{Conclusion}
+Replacing the stop token with a learned idle action, routing every token to an output channel with a small head, and inserting events at their true arrival time let a single LLM think, speak, write, code, call tools, remember and wait without an agent loop. In controlled synthetic tests this matched in-stream tags with fewer tokens, answered urgent requests faster than a rule-based orchestrator at similar overall success, and, as expected by construction, handled interrupts far better than a turn-based loop. The multimodal pilot shows that vision and step-by-step reasoning can share the same routed stream. Whether the approach helps on natural, open-ended tasks remains to be tested.
+
+\paragraph{Reproducibility.} Environment, oracle, data builder, training, rollout and analysis code, the hypotheses document, all test-episode seeds and per-episode result files are available at \url{https://github.com/SiavashShirzad/NeverIdleMind}.
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+\end{document}

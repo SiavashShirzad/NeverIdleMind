@@ -1,0 +1,23 @@
+\begin{tabular}{llrrrrrrr}
+\toprule
+Arm & Seeds & Task & Episode & Quick & Cancel & Revise & Quick lat. & Tokens \\
+\midrule\multicolumn{9}{l}{\textit{In-distribution (300 episodes, 3--5 tasks)}}\\
+Router (ours) & 3 & 99.6 {\scriptsize[99.3, 99.8]} & 97.4 {\scriptsize[96.0, 98.7]} & 98.4 {\scriptsize[97.4, 99.3]} & 100.0 {\scriptsize[100.0, 100.0]} & 100.0 {\scriptsize[100.0, 100.0]} & 7 {\scriptsize[7, 8]} & 294 {\scriptsize[286, 302]} \\
+\quad oracle & -- & {\color{gray}99.5} & {\color{gray}97.0} & {\color{gray}98.2} & {\color{gray}99.3} & {\color{gray}100.0} & {\color{gray}7} & {\color{gray}293} \\
+In-stream tags & 3 & 99.4 {\scriptsize[99.1, 99.7]} & 96.4 {\scriptsize[94.6, 98.1]} & 98.2 {\scriptsize[97.0, 99.1]} & 99.3 {\scriptsize[97.8, 100.0]} & 99.7 {\scriptsize[99.1, 100.0]} & 9 {\scriptsize[8, 9]} & 320 {\scriptsize[312, 327]} \\
+\quad oracle & -- & {\color{gray}99.6} & {\color{gray}97.7} & {\color{gray}98.7} & {\color{gray}99.3} & {\color{gray}100.0} & {\color{gray}9} & {\color{gray}318} \\
+Orchestrator & 3 & 97.6 {\scriptsize[96.9, 98.3]} & 87.1 {\scriptsize[83.3, 90.6]} & 91.5 {\scriptsize[88.6, 94.1]} & 100.0 {\scriptsize[100.0, 100.0]} & 100.0 {\scriptsize[100.0, 100.0]} & 11 {\scriptsize[10, 12]} & 359 {\scriptsize[349, 370]} \\
+\quad oracle & -- & {\color{gray}97.5} & {\color{gray}86.7} & {\color{gray}91.2} & {\color{gray}100.0} & {\color{gray}100.0} & {\color{gray}11} & {\color{gray}361} \\
+Turn-based & 3 & 66.5 {\scriptsize[64.9, 68.1]} & 4.3 {\scriptsize[2.3, 6.7]} & 11.7 {\scriptsize[8.5, 15.2]} & 1.4 {\scriptsize[0.0, 3.5]} & 99.7 {\scriptsize[99.1, 100.0]} & 206 {\scriptsize[193, 220]} & 338 {\scriptsize[329, 347]} \\
+\quad oracle & -- & {\color{gray}66.4} & {\color{gray}4.3} & {\color{gray}11.7} & {\color{gray}0.7} & {\color{gray}100.0} & {\color{gray}207} & {\color{gray}338} \\
+\midrule\multicolumn{9}{l}{\textit{Stress (300 episodes, 6--8 tasks)}}\\
+Router (ours) & 3 & 97.7 {\scriptsize[97.2, 98.1]} & 81.8 {\scriptsize[78.6, 84.9]} & 99.4 {\scriptsize[98.9, 99.8]} & 96.8 {\scriptsize[95.6, 97.9]} & 95.2 {\scriptsize[93.9, 96.4]} & 7 {\scriptsize[7, 7]} & 515 {\scriptsize[504, 527]} \\
+\quad oracle & -- & {\color{gray}99.9} & {\color{gray}99.3} & {\color{gray}99.8} & {\color{gray}99.7} & {\color{gray}100.0} & {\color{gray}7} & {\color{gray}513} \\
+In-stream tags & 3 & 96.8 {\scriptsize[96.2, 97.3]} & 77.0 {\scriptsize[73.7, 80.2]} & 99.6 {\scriptsize[99.3, 99.9]} & 97.2 {\scriptsize[96.1, 98.1]} & 93.7 {\scriptsize[92.4, 95.0]} & 9 {\scriptsize[8, 9]} & 546 {\scriptsize[537, 555]} \\
+\quad oracle & -- & {\color{gray}99.9} & {\color{gray}99.3} & {\color{gray}99.8} & {\color{gray}100.0} & {\color{gray}100.0} & {\color{gray}9} & {\color{gray}556} \\
+Orchestrator & 3 & 98.0 {\scriptsize[97.6, 98.4]} & 85.8 {\scriptsize[82.8, 88.8]} & 98.1 {\scriptsize[97.0, 99.1]} & 97.8 {\scriptsize[96.9, 98.6]} & 98.0 {\scriptsize[97.2, 98.8]} & 8 {\scriptsize[8, 9]} & 628 {\scriptsize[613, 645]} \\
+\quad oracle & -- & {\color{gray}99.5} & {\color{gray}96.0} & {\color{gray}98.2} & {\color{gray}100.0} & {\color{gray}100.0} & {\color{gray}8} & {\color{gray}619} \\
+Turn-based & 3 & 60.3 {\scriptsize[59.4, 61.2]} & 0.0 {\scriptsize[0.0, 0.0]} & 6.3 {\scriptsize[4.4, 8.5]} & 0.0 {\scriptsize[0.0, 0.0]} & 100.0 {\scriptsize[100.0, 100.0]} & 487 {\scriptsize[461, 515]} & 660 {\scriptsize[650, 670]} \\
+\quad oracle & -- & {\color{gray}60.3} & {\color{gray}0.0} & {\color{gray}6.3} & {\color{gray}0.0} & {\color{gray}100.0} & {\color{gray}487} & {\color{gray}659} \\
+\bottomrule
+\end{tabular}

@@ -1,0 +1,14 @@
+ckpt/
+archive_v0/
+logs/
+data/*.pt
+data/vis/*.pt
+__pycache__/
+*.pyc
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+runs/*.npy
+runs/tiny_*

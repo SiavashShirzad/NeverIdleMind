@@ -1,0 +1,12 @@
+\begin{tabular}{llrrrrrrr}
+\toprule
+Arm & Eviction & Seeds & Task & Episode & Revise & Cancel & Plain & Tokens \\
+\midrule
+Router (ours) & none (full context) & 3 & 84.3 {\scriptsize[82.7, 86.1]} & 20.8 {\scriptsize[12.5, 31.2]} & 78.5 {\scriptsize[75.4, 82.0]} & 74.9 {\scriptsize[71.4, 78.8]} & 87.3 {\scriptsize[85.2, 89.4]} & 4578 {\scriptsize[4416, 4678]} \\
+Router (ours) & keep mem-routed & 3 & 97.8 {\scriptsize[97.0, 98.5]} & 50.0 {\scriptsize[37.5, 62.5]} & 97.3 {\scriptsize[94.8, 99.2]} & 96.1 {\scriptsize[93.3, 98.4]} & 98.1 {\scriptsize[96.8, 99.1]} & 2481 {\scriptsize[2434, 2533]} \\
+Router (ours) & sliding window & 3 & 97.7 {\scriptsize[97.0, 98.4]} & 49.0 {\scriptsize[36.5, 62.5]} & 97.9 {\scriptsize[95.3, 99.7]} & 96.0 {\scriptsize[93.2, 98.4]} & 98.1 {\scriptsize[97.0, 99.0]} & 2506 {\scriptsize[2451, 2562]} \\
+In-stream tags & none (full context) & 3 & 91.9 {\scriptsize[89.8, 93.7]} & 14.6 {\scriptsize[7.3, 24.0]} & 93.4 {\scriptsize[90.7, 95.9]} & 95.9 {\scriptsize[92.6, 98.4]} & 90.0 {\scriptsize[87.9, 92.1]} & 2910 {\scriptsize[2648, 3257]} \\
+In-stream tags & keep mem-routed & 3 & 95.0 {\scriptsize[91.8, 97.6]} & 44.8 {\scriptsize[30.2, 59.4]} & 94.6 {\scriptsize[91.0, 97.8]} & 97.3 {\scriptsize[95.1, 99.2]} & 94.2 {\scriptsize[89.8, 97.7]} & 2853 {\scriptsize[2650, 3106]} \\
+In-stream tags & sliding window & 3 & 96.3 {\scriptsize[94.0, 98.1]} & 53.1 {\scriptsize[38.5, 66.7]} & 96.2 {\scriptsize[93.4, 98.4]} & 97.7 {\scriptsize[95.8, 99.3]} & 96.2 {\scriptsize[93.0, 98.4]} & 2792 {\scriptsize[2634, 3004]} \\
+\bottomrule
+\end{tabular}

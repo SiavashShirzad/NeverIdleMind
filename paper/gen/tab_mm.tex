@@ -1,0 +1,18 @@
+\begin{tabular}{lrrr}
+\toprule
+Evaluation & $n$ & router\_mm (two-stage) & no alignment stage \\
+\midrule
+GSM8K, base Qwen3-0.6B, non-thinking mode & 300 & 38.3 {\scriptsize[33.0, 43.3]} & -- \\
+GSM8K, base Qwen3-0.6B, thinking mode & 300 & 53.7 {\scriptsize[47.7, 59.3]} & -- \\
+GSM8K, think channel, no interruptions & 300 & 52.0 {\scriptsize[46.7, 57.7]} & 49.7 {\scriptsize[44.0, 55.3]} \\
+GSM8K, 2 quick tasks arrive mid-thought & 300 & 45.7 {\scriptsize[40.0, 51.0]} & 46.3 {\scriptsize[40.7, 52.0]} \\
+\quad quick tasks within deadline & 600 & 97.3 {\scriptsize[96.0, 98.5]} & 96.5 {\scriptsize[95.0, 97.8]} \\
+Visual QA, all questions & 600 & 95.3 {\scriptsize[93.7, 96.8]} & 42.2 {\scriptsize[38.2, 46.3]} \\
+\quad count by colour & 150 & 94.0 {\scriptsize[90.0, 97.3]} & 42.7 {\scriptsize[34.7, 50.7]} \\
+\quad count by shape & 152 & 88.8 {\scriptsize[83.6, 93.4]} & 32.9 {\scriptsize[25.7, 40.1]} \\
+\quad existence & 158 & 98.7 {\scriptsize[96.8, 100.0]} & 69.6 {\scriptsize[62.7, 77.2]} \\
+\quad colour of unique shape & 140 & 100.0 {\scriptsize[100.0, 100.0]} & 20.7 {\scriptsize[14.3, 27.9]} \\
+\quad concurrent non-visual tasks & 900 & 99.6 {\scriptsize[99.1, 99.9]} & 99.3 {\scriptsize[98.8, 99.8]} \\
+AsyncWorld id episodes, all tasks & 1637 & 99.8 {\scriptsize[99.5, 99.9]} & 99.7 {\scriptsize[99.4, 99.9]} \\
+\bottomrule
+\end{tabular}
